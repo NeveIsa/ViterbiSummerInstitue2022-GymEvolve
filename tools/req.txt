@@ -1,0 +1,7 @@
+numpy
+gym
+gym[all]
+fire
+tqdm
+more-itertools
+pathos
