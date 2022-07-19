@@ -5,3 +5,4 @@ fire
 tqdm
 more-itertools
 pathos
+pyswarms
