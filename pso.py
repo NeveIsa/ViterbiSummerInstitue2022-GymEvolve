@@ -42,7 +42,12 @@ def main(POPSIZE=100, GENS=10):
     negrewards, bestparticle = optimizer.optimize(objectivefn, iters=GENS)
     rewards = -negrewards
 
+
+    plot_cost_history(cost_history=optimizer.cost_history)
+    plt.show()
+
     spacegame.play(policy=linearpolicy, organism=bestparticle.reshape(2, 8), render=True)
 
 if __name__ == "__main__":
     fire.Fire(main)
+
