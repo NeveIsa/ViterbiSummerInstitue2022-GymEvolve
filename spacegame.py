@@ -43,13 +43,13 @@ def play(policy, organism, render=False):
             env.render()
 
         # input()
-        total_x = abs(observation[0]) + 0.75*abs(total_x)
-        total_reward = reward + 1*total_reward 
+        total_x = abs(observation[0]) + 0.75 * abs(total_x)
+        total_reward = reward + 1 * total_reward
 
         if done:
             observation, info = env.reset(return_info=True)
             env.close()
-            return total_reward #- total_x
+            return total_reward  # - total_x
             # return reward
 
 

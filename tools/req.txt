@@ -6,3 +6,7 @@ tqdm
 more-itertools
 pathos
 pyswarms
+geneticalgorithm
+dill
+umap-learn
+celluloid

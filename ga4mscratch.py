@@ -7,6 +7,9 @@ import fire
 import numpy as np
 from more_itertools import chunked
 from tqdm import tqdm
+import dill
+from datetime import datetime
+import spacegame
 
 
 def stopgame(signo, stackframe):
@@ -17,7 +20,9 @@ signal.signal(signal.SIGINT, stopgame)
 
 
 class Algo:
-    def __init__(self, game, orgdims=16, popsize=100, userpolicy=None, nworkers=25, render=False):
+    def __init__(
+        self, game, orgdims=16, popsize=100, userpolicy=None, nworkers=25, render=False
+    ):
         self.game = game
         self.fitness = [0] * popsize
         self.survivors = []
@@ -27,8 +32,8 @@ class Algo:
         self.nworkers = nworkers
         self.orgdims = orgdims
         self.pop = [self.getorganism() for i in range(popsize)]
-
-
+        self.lastpop = [None for i in range(popsize)]
+        
     def policy(self, observation, organism):
         if self.userpolicy:
             action = self.userpolicy(observation, organism)
@@ -38,7 +43,7 @@ class Algo:
         return action
 
     def getorganism(self):
-        return (np.random.rand( self.orgdims ) - 0.5) * 100
+        return (np.random.rand(self.orgdims) - 0.5) * 100
 
     def mate(self, replace_fraction=0.5):
 
@@ -80,11 +85,12 @@ class Algo:
             sorted_pop[:n_survivors]
         )  # if we dond't copy, mutate will modify the survivors too
 
-    def mutate(self, probability=0.05, deviation_fraction=0.2):
+    def mutate(self, probability=0.1, deviation_fraction=0.2):
         for i in range(self.popsize):
-            deviation_magnitude = np.mean(self.pop[i]) * deviation_fraction
-            deviation = deviation_magnitude * np.random.rand(*self.pop[i].shape)
-            self.pop[i] += deviation
+            if np.random.rand() < probability:
+                deviation_magnitude = np.mean(self.pop[i]) * deviation_fraction
+                deviation = deviation_magnitude * np.random.rand(*self.pop[i].shape)
+                self.pop[i] += deviation
 
     def evolve(self):
         def evalorgs(org):
@@ -95,7 +101,9 @@ class Algo:
         pool = mp.Pool(self.nworkers)
 
         for orgids in tqdm(
-            list(chunked(range(self.popsize), self.nworkers)), colour="green", leave=False
+            list(chunked(range(self.popsize), self.nworkers)),
+            colour="green",
+            leave=False,
         ):
 
             orgs = list(map(lambda i: self.pop[i], orgids))
@@ -108,6 +116,12 @@ class Algo:
             for i, orgid in enumerate(orgids):
                 self.fitness[orgid] = __rewards[i]
 
+         # save population
+        self.lastpop = [np.copy(org) for org in self.pop]  
+        
+
+
+
         # select a few
         self.unnaturalselection()
 
@@ -118,49 +132,70 @@ class Algo:
         self.mutate()
 
 
-
-
-
-
 def main(POPSIZE=50, GENS=3, NWORKERS=25, RENDER=False):
 
-    import spacegame    
+    outfile = f"store/ga/{datetime.now().isoformat().split('.')[0]}"
     
+
     ########## LINEAR
     def linearpolicy(observation, organism):
         # return organism[:-2].reshape(2,8) @ np.array(observation) + organism[-2:]
-        return organism.reshape(2,8) @ np.array(observation)
+        return organism.reshape(2, 8) @ np.array(observation)
 
     genealgo = Algo(
         # orgdims=18, popsize=POPSIZE, userpolicy=linearpolicy, game=spacegame, render=RENDER
-        orgdims=16, popsize=POPSIZE, userpolicy=linearpolicy, game=spacegame, render=RENDER
+        orgdims=16,
+        popsize=POPSIZE,
+        userpolicy=linearpolicy,
+        game=spacegame,
+        render=RENDER,
     )
 
     for generation in tqdm(range(GENS), colour="red", leave=True):
         genealgo.evolve()
-        finalreward = spacegame.play(genealgo.policy, genealgo.survivors[0], render=True)
-        print("\nLinear Reward :", finalreward)
+
         print("\n\ntop5:", sorted(genealgo.fitness, reverse=True)[:5], "\n\n")
+
+        # finalreward = spacegame.play(
+            # genealgo.policy, genealgo.survivors[0], render=True
+        # )
+        # print("\nLinear Reward :", finalreward)
+
+
+        # store to file
+        lastpop = np.array(genealgo.lastpop)   
+        lastfitness = np.array(genealgo.fitness)
+        dill.dump({"pop":lastpop, "fitness": lastfitness}, open(f"{outfile}-gen:{generation}.dill",'wb'))
+
+
+
+
+    # ########### NONLINEEAR
+    # def nonlinearpolicy(observation, organism):
+        # # action = organism[:-2].reshape(2,8) @ np.array(observation) + organism[-2:]
+        # action = organism.reshape(2, 8) @ np.array(observation)
+        # return np.arctan(action) * 2 / np.pi
+# 
+    # genealgo = Algo(
+        # # orgdims=18, popsize=POPSIZE, userpolicy=nonlinearpolicy, game=spacegame, render=RENDER
+        # orgdims=16,
+        # popsize=POPSIZE,
+        # userpolicy=nonlinearpolicy,
+        # game=spacegame,
+        # render=RENDER,
+    # )
+# 
+    # for generation in tqdm(range(GENS), colour="red", leave=True):
+        # genealgo.evolve()
+        # finalreward = spacegame.play(
+            # genealgo.policy, genealgo.survivors[0], render=True
+        # )
+        # print("\n NonLinear Reward :", finalreward)
+        # print("\n\ntop5:", sorted(genealgo.fitness, reverse=True)[:5], "\n\n")
+
+
 
     
-    ########### NONLINEEAR
-    def nonlinearpolicy(observation, organism):
-        # action = organism[:-2].reshape(2,8) @ np.array(observation) + organism[-2:]
-        action = organism.reshape(2,8) @ np.array(observation)
-        return np.arctan(action) * 2 / np.pi
-
-    genealgo = Algo(
-        # orgdims=18, popsize=POPSIZE, userpolicy=nonlinearpolicy, game=spacegame, render=RENDER
-        orgdims=16, popsize=POPSIZE, userpolicy=nonlinearpolicy, game=spacegame, render=RENDER
-    )
-
-    for generation in tqdm(range(GENS), colour="red", leave=True):
-        genealgo.evolve()
-        finalreward = spacegame.play(genealgo.policy, genealgo.survivors[0], render=True)
-        print("\n NonLinear Reward :", finalreward)
-        print("\n\ntop5:", sorted(genealgo.fitness, reverse=True)[:5], "\n\n")
-
-
-
+    
 if __name__ == "__main__":
     fire.Fire(main)
